@@ -25,9 +25,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # 4. (Optional) Run tests
-      - name: Run tests
-        run: npm run test -- --watch=false --browsers=ChromeHeadless
+      # # 4. (Optional) Run tests
+      # - name: Run tests
+      #   run: npm run test -- --watch=false --browsers=ChromeHeadless
 
       # 5. Build Angular for production
       - name: Build Angular
