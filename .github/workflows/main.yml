@@ -14,26 +14,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 2. Setup Node.js
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'        # match your Angular project's Node version
-          cache: 'npm'
+      # 2. Set up Docker Buildx
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      # 3. Install dependencies
-      - name: Install dependencies
-        run: npm ci
+      # 3. Build Angular dist via Docker build stage
+      - name: Build Angular with Docker
+        run: |
+          docker buildx build --target build --output type=local,dest=dist-out .
 
-      # 4. (Optional) Run tests
-      - name: Run tests
-        run: npm run test -- --watch=false --browsers=ChromeHeadless
+      # 4. Copy dist files to expected location
+      - name: Prepare dist for deployment
+        run: |
+          cp -r dist-out/app/dist/stradux dist/
 
-      # 5. Build Angular for production
-      - name: Build Angular
-        run: npm run build -- --configuration production
-
-      # 6. Configure AWS credentials
+      # 5. Configure AWS credentials
       - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -41,14 +36,14 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      # 7. Sync dist/ to S3
+      # 6. Sync dist/ to S3
       - name: Deploy to S3
         run: |
           aws s3 sync dist/ s3://${{ secrets.S3_BUCKET }}/ \
             --delete \
             --cache-control max-age=31536000,public
 
-      # 8. Invalidate CloudFront cache
+      # 7. Invalidate CloudFront cache
       - name: Invalidate CloudFront
         run: |
           aws cloudfront create-invalidation \
