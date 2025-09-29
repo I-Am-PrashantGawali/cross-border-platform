@@ -1,51 +1,45 @@
-name: Build & Deploy Angular to S3 + CloudFront
+name: Deploy Angular app (OIDC)
 
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
+  # push:
+  #   branches: [ main ]
 
 jobs:
-  build-deploy:
+  deploy:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write      # 🔑 required for OIDC
+      contents: read       # checkout
 
     steps:
-      # 1. Checkout repo
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. Set up Docker Buildx
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
-      # 3. Build Angular dist via Docker build stage
-      - name: Build Angular with Docker
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Clean and build Angular
         run: |
-          docker buildx build --target build --output type=local,dest=dist-out .
+          rm -rf dist
+          npm run build
 
-      # 4. Copy dist files to expected location
-      - name: Prepare dist for deployment
-        run: |
-          cp -r dist-out/app/dist/stradux dist/
-
-      # 5. Configure AWS credentials
-      - name: Configure AWS
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: arn:aws:iam::544893999043:role/GitHubOIDCDeployRole
+          aws-region: ap-south-1
 
-      # 6. Sync dist/ to S3
-      - name: Deploy to S3
-        run: |
-          aws s3 sync dist/ s3://${{ secrets.S3_BUCKET }}/ \
-            --delete \
-            --cache-control max-age=31536000,public
+      - name: Upload to S3
+        run: aws s3 cp dist/stradux/ s3://cross-border-platform/ --recursive
 
-      # 7. Invalidate CloudFront cache
-      - name: Invalidate CloudFront
-        run: |
-          aws cloudfront create-invalidation \
-            --distribution-id ${{ secrets.CLOUDFRONT_DIST_ID }} \
-            --paths "/*"
+      # - name: Invalidate CloudFront cache
+      #   run: |
+      #     aws cloudfront create-invalidation \
+      #       --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+      #       --paths "/*"
